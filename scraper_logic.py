@@ -29,25 +29,32 @@ class Scraper():
         self.events = {}
         self.player_stats = defaultdict(dict)
         self.team_stats = defaultdict(dict)
-        self.scrape()
 
     def scrape(self):
         try:
-            links_to_scrape = self.get_year_links("https://www.baseball-almanac.com/yearmenu.shtml")
-            links = ["https://www.baseball-almanac.com/yearly/yr1996n.shtml"]
+            links = self.get_year_links("https://www.baseball-almanac.com/yearmenu.shtml")
+            # links = ["https://www.baseball-almanac.com/yearly/yr1887n.shtml", "https://www.baseball-almanac.com/yearly/yr1970n.shtml"]
             self.log_data(links)
+            # self.log_data(["https://www.baseball-almanac.com/yearly/yr1970n.shtml", "https://www.baseball-almanac.com/yearly/yr1986n.shtml", "https://www.baseball-almanac.com/yearly/yr1887n.shtml", "https://www.baseball-almanac.com/yearly/yr1883n.shtml", "https://www.baseball-almanac.com/yearly/yr1934a.shtml"])
             
         except Exception as e:
             print("Unable to open the url provided.")
             print(f"Exception: {type(e).__name__} {e}")
 
-        player_hit_df, player_pitch_df, standing_df = self.convert_stats_to_df(self.player_stats)
+        player_hit_df, player_pitch_df, player_standing_df = self.convert_stats_to_df(self.player_stats)
         team_hit_df, team_pitch_df, standing_df = self.convert_stats_to_df(self.team_stats)
         
         # # TODO THIS IS TEST TO MAKE SURE DATA IS CORRECT
         # temp = pd.json_normalize(self.player_stats)
         # temp.to_csv("test.csv", index = False)
+        
         print(player_hit_df)
+        print(player_pitch_df)
+        player_hit_df.to_csv("player_hit.csv", index = False)
+        player_pitch_df.to_csv("player_pitch.csv", index = False)
+        team_hit_df.to_csv("team_hit.csv", index = False)
+        team_pitch_df.to_csv("team_pitch.csv", index = False)
+        standing_df.to_csv("standing.csv", index = False)
         
         driver.quit()
   
@@ -72,73 +79,138 @@ class Scraper():
             search_result = re.search(pattern, scraped_data.text).group()
             if search_result:
                 year, league = search_result.split(" ", 1)
-                return int(year), league.title()
+                year, league = int(year), league.title()
+            if (year >= 1901 and league == "American League") or league == "National League":
+                return year, league
         # TODO This is being raised because American Association has link that also ends in a.  Need to fix
         except Exception:
-            return None, None
+            pass
 
         
     # TODO Make this smaller functions T_T
     def get_data(self, driver):
         player_stats_dict = {}
         team_stats_dict = {}
-        key_list = []
         search_results = driver.find_elements(By.CSS_SELECTOR, "table.boxed")
         
         for result in search_results:
-            banners = []
-            cell_results = []
-            rows = result.find_elements(By.TAG_NAME, "tr")
-            keys = []
+            col_names = []
+            duplicate_rows = {}
+            table_name = None
+            col_num = None
+            data_list = []
             
-            prev_cells = None
+            rows = result.find_elements(By.TAG_NAME, "tr")
             for row in rows:
                 # league_pattern = r"(American|National)\sLeague"
-                player_pattern = r"(Player|Pitcher)"
-                team_pattern = r"Team(?= Review)|Team Standings"
-                stat_name = r"^.+Statistics"
-                headers = [header.text for header in row.find_elements(By.XPATH, ".//h2 | .//p")]
-                if headers:
-                    if match := re.search(player_pattern, headers[0]):
-                        player = "Player"
-                        keys.append(player)
-                    if match := re.search(team_pattern, headers[0]) or (match := re.search(team_pattern, headers[1])):
-                        team = match.group().split(" ")
-                        keys.extend(team)
-                    if match := re.search(stat_name, headers[1]):
-                        stat = match.group()
-                        keys.append(stat)
-                banners = [banner.text.replace(" [Click for roster]", "") for banner in row.find_elements(By.XPATH, ".//td[contains(@class, 'banner')]")]
-                if banners:
-                    key_list = [key for key in banners if key != "Top 25"]
-                cells = [stat.text.strip() for stat in row.find_elements(By.XPATH, ".//td[contains(@class, 'datacolBox') or contains(@class, 'datacolBlue')]") if stat.text != "Top 25"]
-                if cells:
-                    regions = ["East", "Central", "West"]
-                    if "Standings" in keys:
-                        if key_list[0] in regions:
-                            region = key_list[0]
-                            key_list[0] = "Region"
-                        cells.insert(0, region)
-                    if len(cells) != len(key_list):
-                        cells.insert(0, prev_cells[0])
-                        diff = len(prev_cells) - len(cells)
-                        cells.extend(prev_cells[-diff:])
-                    if len(cells) > 1:
-                        prev_cells = cells
-                        cell_results.append(cells)
-            # TODO clean up events (do it in a seperate function??)
+                temp_table_name, temp_col_num = self.find_table_name_and_columns(row)
+                temp_col_names, temp_dup_rows = self.find_col_names(row)
+                data, temp_dup_rows = self.find_cell_data(row, col_num, duplicate_rows)
+                if temp_table_name:
+                    table_name = temp_table_name
+                if temp_col_num:
+                    col_num = temp_col_num
+                if temp_dup_rows:
+                    duplicate_rows = temp_dup_rows
+                if temp_col_names:
+                    col_names = temp_col_names
                 
-            list_of_dictionaries = [dict(zip(key_list, values)) for values in cell_results]
-            if keys[0] == "Player":
-                player_stats_dict[keys[1]] = list_of_dictionaries
-            elif keys[0] == "Team":
-                team_stats_dict[keys[1]] = list_of_dictionaries
+            # TODO clean up events (do it in a seperate function??)
+                if data and col_names:
+                    if len(data) == len(col_names):
+                        data_list.append(data)
+                    
+            if table_name and col_names and data_list:
+                # Convert the list of rows into a list of dictionaries
+                list_of_dictionaries = [dict(zip(col_names, row)) for row in data_list]
+                
+                # Determine which dictionary to add to
+                if table_name[0] == "Player":
+                    player_stats_dict[table_name[-1]] = list_of_dictionaries
+                elif table_name[0] == "Team":
+                    team_stats_dict[table_name[-1]] = list_of_dictionaries
+                    
         return player_stats_dict, team_stats_dict
-        
+    
+    def find_table_name_and_columns(self, row):
+        table_name = []
+        player_pattern = r"(Player|Pitcher)"
+        team_pattern = r"Team(?= Review)|Team Standings"
+        stat_name = r"^.+Statistics"
+        try:
+            headers = [header.text for header in row.find_elements(By.XPATH, ".//h2 | .//p")]
+        except:
+            pass
+        if not headers:
+            return None, None
+        num_cols = row.find_element(By.TAG_NAME, "td").get_attribute("colspan")
+
+        if match := re.search(player_pattern, headers[0]):
+            player = "Player"
+            table_name.append(player)
+        if match := re.search(team_pattern, headers[0]) or (match := re.search(team_pattern, headers[1])):
+            team = match.group().split(" ")
+            table_name.extend(team)
+        if match := re.search(stat_name, headers[1]):
+            stat = match.group()
+            table_name.append(stat)
+            
+        return table_name, int(num_cols)
+    
+    def find_col_names(self, row):
+        try:
+            elements = row.find_elements(By.XPATH, ".//td[contains(@class, 'banner')]")
+        except:
+            pass
+        col_names = []
+        duplicate_row_val = {}
+        if not elements:
+            return None, None
+        regions = ["East", "Central", "West"]
+        for idx, name in enumerate(elements):
+            num_rows = name.get_attribute("rowspan")
+            if num_rows:
+                duplicate_row_val[idx] = [name.text, int(num_rows)]
+            if name.text in regions:
+                col_names.append("Region")
+            else:
+                col_names.append(name.text.replace(" [Click for roster]", "").strip())
+        return col_names, duplicate_row_val
+
+    def find_cell_data(self, row, num_cols, duplicate_rows):
+        try:
+            cells = row.find_elements(By.XPATH, ".//td[contains(@class, 'datacolBox') or contains(@class, 'datacolBlue')]")
+        except:
+            pass
+        if not cells:
+            return None, duplicate_rows
+        data = []
+        for idx, cell in enumerate(cells):
+            num_rows = cell.get_attribute("rowspan")
+            if num_rows:
+                duplicate_rows[idx] = [cell.text, int(num_rows)]
+            data.append(cell.text.strip())
+        if len(data) != num_cols:
+            for idx, value in duplicate_rows.items():
+                data.insert(idx, value[0])
+                duplicate_rows[idx][1] -= 1
+        duplicate_rows = {k: v for k, v in duplicate_rows.items() if v[1] > 0}
+        # if len(cells) > 1 and len(cells) == len(col_names):
+        #     prev_cells = cells
+        #     cell_results.append(cells)
+        return data, duplicate_rows
+
     def clean_events(self, driver):
         # TODO save events links and scrape that for winners
         events_dict = {}
-        row = driver.find_element(By.XPATH, ".//td[contains(text(), 'Events') or contains(text(), 'Salary')]")
+        row = None
+        try:
+            row = driver.find_element(By.XPATH, ".//td[contains(., 'Events') or contains(., 'Salary')]")
+        except:
+            pass
+        if not row:
+            return events_dict
+        
         event_text = row.text.split("\n")
         
         for text in event_text:
@@ -149,28 +221,27 @@ class Scraper():
                 events_dict[title] = info
         return events_dict
         
-    def get_event(self, driver):
-        search_results = driver.find_elements(By.CSS_SELECTOR, "table.boxed > tbody > tr")
+    # def get_event(self, driver):
+    #     search_results = driver.find_elements(By.CSS_SELECTOR, "table.boxed > tbody > tr")
         
-        print(search_results)
+    #     print(search_results)
     
     def log_data(self, links : list):
         for link in links:
             try:
                 driver.get(link)
-                year, league = self.get_year_league(driver)
-            # TODO Currently exception is happening because American Association link also ends in a.  Need to figure out how to remove those from link list
+                sleep(2)
             except Exception:
-                break
-            
+                pass
+            year, league = self.get_year_league(driver)
             if year and league:
                 player, team = self.get_data(driver)
                 self.player_stats[year][league] = player
                 self.team_stats[year][league] = team
-                
                 if not self.events.get(year):
                     events = self.clean_events(driver)
                     self.events[year] = events
+            
     
     def convert_events_to_df(self, dictionary):
         # Events will have tables [Events, Salary]
@@ -193,7 +264,7 @@ class Scraper():
         hit_stats = pd.DataFrame(hit_table)
         pitch_stats = pd.DataFrame(pitch_table)
         standing_stats = pd.DataFrame(standing_table)
-        
+
         return hit_stats, pitch_stats, standing_stats
         
 
@@ -205,4 +276,4 @@ class Scraper():
             table.append(stats)
 
 if __name__ == "__main__":
-    Scraper()
+    Scraper().scrape()
