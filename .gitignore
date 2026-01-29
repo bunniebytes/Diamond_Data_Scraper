@@ -1,0 +1,9 @@
+# Outputs
+*.csv
+
+# Selenium Chrome profile/cache
+selenium_profile/
+
+# Python cache
+__pycache__/
+*.py[cod]
