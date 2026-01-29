@@ -1,0 +1,2 @@
+"""Diamond Data Scraper package."""
+
