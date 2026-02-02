@@ -1,19 +1,22 @@
 import sqlite3
 import pandas as pd
-import datetime
 from contextlib import closing
+import csv
 
 class ConvertToSQL():
     def __init__(self):
         pass
     
     def run(self):
-        self.convert_csv_to_sql("player_hit.csv")
-        self.convert_csv_to_sql("player_pitch.csv")
-        self.convert_csv_to_sql("standing.csv")
-        self.convert_csv_to_sql("team_hit.csv")
-        self.convert_csv_to_sql("team_pitch.csv")
-    
+        player_hit_df = self.convert_csv_to_sql("player_hit.csv")
+        player_pitch_df = self.convert_csv_to_sql("player_pitch.csv")
+        standing_df = self.convert_csv_to_sql("standing.csv")
+        team_hit_df = self.convert_csv_to_sql("team_hit.csv")
+        team_pitch_df = self.convert_csv_to_sql("team_pitch.csv")
+        draft_df = self.convert_csv_to_sql("draft.csv")
+        home_run_derby_df = self.convert_csv_to_sql("home_run_derby.csv")
+        salaries = self.convert_csv_to_sql("salary.csv")
+        
     def convert_csv_to_sql(self, file):
         table_name = file.replace(".csv", "")
         df = pd.read_csv(file)
@@ -22,15 +25,20 @@ class ConvertToSQL():
         with closing(sqlite3.connect("baseball_data.db")) as conn:
             print("Database successfully opened.")
             df.to_sql(table_name, conn, if_exists = "replace", index = True, index_label = "row_id")
+        
+        if not conn:
+            print("Database successfully close")
+        return df
+        
 
     def clean_data(self, df):
         self.combine_duplicate_columns(df)
         self.standardize_column_types(df)
-        print(df.head())
+        # print(df.head())
         
     def combine_duplicate_columns(self, df):
         column_names = df.columns.str.strip()
-        print(column_names)
+        # print(column_names)
         duplicate_mapping = {"Wins" : "W",
                 "Losses" : "L",
                 "Ties" : "T"}
