@@ -76,14 +76,13 @@ class Scraper():
         # print(salary_df.head())
         # print(home_run_derby_df.head())
         # print(draft_df.head())
-        salary_df.to_csv("salary.csv", index = False)
-        home_run_derby_df.to_csv("home_run_derby.csv", index = False)
-        draft_df.to_csv("draft.csv", index = False)
+        salary_df.to_csv("csv_files/salary.csv", index = False)
+        home_run_derby_df.to_csv("csv_files/home_run_derby.csv", index = False)
+        draft_df.to_csv("csv_files/draft.csv", index = False)
         
         
-        # player_hit_df, player_pitch_df, player_standing_df = self.convert_stats_to_df(self.player_stats)
-        # team_hit_df, team_pitch_df, standing_df = self.convert_stats_to_df(self.team_stats)
-        # events_df = pd.DataFrame(self.events)
+        player_hit_df, player_pitch_df, player_standing_df = self.convert_stats_to_df(self.player_stats)
+        team_hit_df, team_pitch_df, standing_df = self.convert_stats_to_df(self.team_stats)
         
         
         # # TODO THIS IS TEST TO MAKE SURE DATA IS CORRECT
@@ -91,13 +90,11 @@ class Scraper():
         # temp.to_csv("test.csv", index = False)
         # print(player_hit_df)
         # print(player_pitch_df)
-        # player_hit_df.to_csv("player_hit.csv", index = False)
-        # player_pitch_df.to_csv("player_pitch.csv", index = False)
-        # team_hit_df.to_csv("team_hit.csv", index = False)
-        # team_pitch_df.to_csv("team_pitch.csv", index = False)
-        # standing_df.to_csv("standing.csv", index = False)
-        # events_df.to_csv("events.csv", index=False)
-        
+        player_hit_df.to_csv("csv_files/player_hit.csv", index = False)
+        player_pitch_df.to_csv("csv_files/player_pitch.csv", index = False)
+        team_hit_df.to_csv("csv_files/team_hit.csv", index = False)
+        team_pitch_df.to_csv("csv_files/team_pitch.csv", index = False)
+        standing_df.to_csv("csv_files/standing.csv", index = False)
 
         # self.driver.quit()
   
@@ -209,9 +206,9 @@ class Scraper():
     # This is to find col names for the stats page
     def find_col_names(self, table : list):
         # the column names will be index 1 in the list of rows
-        col_names = [col for col in table[1].values() if col != "Top 25"]
+        col_names = [col.replace('\xa0', ' ').strip() for col in table[1].values() if isinstance(col, str)]
         # TODO Clean this up >_<
-        col_names = [col.replace(" [Click for roster]", "").replace(" | Roster", "").replace("(s)", "").replace("East", "Region").replace("Splits", "Strike Splits") for col in col_names if isinstance(col, str)]
+        col_names = [col.replace(" [Click for roster]", "").replace(" | Roster", "").replace("(s)", "").replace("East", "Region").replace("#", "stat_values").strip().lower() for col in col_names if col != "Top 25"]
         return col_names
 
     def find_table_data(self, col_names : list, table : list):
@@ -222,12 +219,19 @@ class Scraper():
         
         for row in table[2::]:
             row_dict = {}
+            row_values = [value for value in row.values()]
+            # Checks if min and avg salary data provided
+            if any(match := re.search(salary_pattern, str(val)) for val in row_values):
+                salary = match.group()
+                # if match := re.search(salary_pattern, current_val):
+            # This skips adding any of the rows that are banners/column names in the table
+            if any("Team" in str(val) for val in row_values) or len(set(row_values)) == 1:
+                continue
             for idx, col_name in enumerate(col_names):
-                row_values = [value for value in row.values()]
                 current_val = str(row_values[idx])
-                if match := re.search(salary_pattern, current_val):
-                    salary = match.group()
-                if col_name != row_values[idx] and len(set(row_values)) != 1 and isinstance(row_values[idx], str):
+                if "$" in current_val:
+                    row_values[idx] = current_val.replace("$", "").replace(",", "")
+                if isinstance(row_values[idx], str):
                     row_dict[col_name] = row_values[idx]
             if row_dict:
                 table_data.append(row_dict)
@@ -243,14 +247,14 @@ class Scraper():
             if len(df.columns) <= 8:
                 records = df.to_dict("records")
                 col_names = self.find_col_names(records)
-                table_data, events = self.find_table_data(col_names, records)
+                table_data, salary = self.find_table_data(col_names, records)
                 dict_name, table_name = self.find_table_name(records)
                 if dict_name == "Player":
                     player_dict[table_name] = table_data
                 else:
                     team_dict[table_name] = table_data
-                if events:
-                    salary_dict = self.clean_salary(events, year)
+                if salary:
+                    salary_dict = self.clean_salary(salary, year)
                     
         return player_dict, team_dict, salary_dict
         
@@ -348,7 +352,7 @@ class Scraper():
         # Home run derby and draft pages are same layout as stats pages
         if event == "Draft" or event == "Home Run Derby":
             col_names = self.find_col_names(table)
-            col_names = [col_name.replace("College or Hometown", "College or HS or Hometown").replace("College or High School", "College or HS or Hometown").replace("Round1", "Round 1").replace("Round2", "Round 2").replace("1stInning", "Round 1").replace("2ndInning", "Round 2").strip() for col_name in col_names]
+            col_names = [col_name.replace("college or hometown", "college_hs_hometown").replace("college or high school", "college_hs_hometown").replace("round1", "round 1").replace("round2", "round 2").replace("1stinning", "round 1").replace("2ndinning", "round 2").replace("stat_values", "picked").replace("selected by", "team").strip().lower() for col_name in col_names]
         return col_names
 
     def find_event_table_data(self, event : str, col_names : list, table : list):

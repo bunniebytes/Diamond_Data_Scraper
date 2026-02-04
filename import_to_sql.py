@@ -1,28 +1,27 @@
 import sqlite3
 import pandas as pd
 from contextlib import closing
-import csv
 
 class ConvertToSQL():
     def __init__(self):
         pass
     
     def run(self):
-        player_hit_df = self.convert_csv_to_sql("player_hit.csv")
-        player_pitch_df = self.convert_csv_to_sql("player_pitch.csv")
-        standing_df = self.convert_csv_to_sql("standing.csv")
-        team_hit_df = self.convert_csv_to_sql("team_hit.csv")
-        team_pitch_df = self.convert_csv_to_sql("team_pitch.csv")
-        draft_df = self.convert_csv_to_sql("draft.csv")
-        home_run_derby_df = self.convert_csv_to_sql("home_run_derby.csv")
-        salaries = self.convert_csv_to_sql("salary.csv")
+        player_hit_df = self.convert_csv_to_sql("csv_files/player_hit.csv")
+        player_pitch_df = self.convert_csv_to_sql("csv_files/player_pitch.csv")
+        standing_df = self.convert_csv_to_sql("csv_files/standing.csv")
+        team_hit_df = self.convert_csv_to_sql("csv_files/team_hit.csv")
+        team_pitch_df = self.convert_csv_to_sql("csv_files/team_pitch.csv")
+        draft_df = self.convert_csv_to_sql("csv_files/draft.csv")
+        home_run_derby_df = self.convert_csv_to_sql("csv_files/home_run_derby.csv")
+        salaries = self.convert_csv_to_sql("csv_files/salary.csv")
         
     def convert_csv_to_sql(self, file):
-        table_name = file.replace(".csv", "")
+        table_name = file.replace(".csv", "").replace("csv_files/", "")
         df = pd.read_csv(file)
         self.clean_data(df)
         
-        with closing(sqlite3.connect("baseball_data.db")) as conn:
+        with closing(sqlite3.connect("db/baseball_data.db")) as conn:
             print("Database successfully opened.")
             df.to_sql(table_name, conn, if_exists = "replace", index = True, index_label = "row_id")
         
@@ -39,9 +38,10 @@ class ConvertToSQL():
     def combine_duplicate_columns(self, df):
         column_names = df.columns.str.strip()
         # print(column_names)
-        duplicate_mapping = {"Wins" : "W",
-                "Losses" : "L",
-                "Ties" : "T"}
+        duplicate_mapping = {"wins" : "w",
+                "losses" : "l",
+                "ties" : "t",
+                "strike splits" : "splits"}
         for full_stat, letter_stat in duplicate_mapping.items():
             if full_stat in column_names and letter_stat in column_names:
                 df[full_stat] = pd.to_numeric(df[full_stat], errors = "coerce")
@@ -51,15 +51,15 @@ class ConvertToSQL():
     
     def standardize_column_types(self, df):
         column_names = df.columns
-        type_mapping = {"Year" : int,
-                        "#" : float,
+        type_mapping = {"year" : int,
+                        "stat_value" : float,
                         # "Wins" : int,
                         # "Losses" : int,
                         # "Ties" : int,
-                        "GB" : float}
+                        "gb" : float,
+                        "picked" : int,
+                        "payroll" : float}
         for column_name, data_type in type_mapping.items():
             if column_name in column_names:
                 df[column_name] = pd.to_numeric(df[column_name], errors = "coerce").fillna(0).astype(data_type)
                 
-if __name__ == "__main__":
-    ConvertToSQL().run()
