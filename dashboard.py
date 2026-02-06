@@ -38,6 +38,7 @@ with closing(sqlite3.connect("db/baseball_data.db")) as conn:
 
 # Initialize Dash app
 app = Dash(__name__)
+server = app.server
 
 # Layout
 app.layout = html.Div([
