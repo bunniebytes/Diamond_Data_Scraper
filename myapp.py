@@ -4,9 +4,6 @@ from contextlib import closing
 from dash import Dash, dcc, html, Input, Output, callback
 import plotly.express as px
 import plotly.graph_objects as go
-import main
-
-main.main()
 
 with closing(sqlite3.connect("db/baseball_data.db")) as conn:
     
