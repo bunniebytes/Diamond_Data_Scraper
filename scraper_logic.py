@@ -225,12 +225,14 @@ class Scraper():
                 salary = match.group()
                 # if match := re.search(salary_pattern, current_val):
             # This skips adding any of the rows that are banners/column names in the table
-            if any("Team" in str(val) for val in row_values) or len(set(row_values)) == 1:
+            if any("Team" in str(val) for val in row_values) or any("Selected" in str(val) for val in row_values) or len(set(row_values)) == 1:
                 continue
             for idx, col_name in enumerate(col_names):
                 current_val = str(row_values[idx])
                 if "$" in current_val:
                     row_values[idx] = current_val.replace("$", "").replace(",", "")
+                if col_name == "wp":
+                    row_values[idx] = current_val.replace(",", ".")
                 if isinstance(row_values[idx], str):
                     row_dict[col_name] = row_values[idx]
             if row_dict:
