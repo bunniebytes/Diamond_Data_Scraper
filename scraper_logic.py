@@ -17,22 +17,22 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 
 # Define a directory for the user profile (cache and cookies will be saved here)
-# profile_dir = os.path.abspath('selenium_profile')
+profile_dir = os.path.abspath('selenium_profile')
 
 # # Ensure the directory exists
-# if not os.path.exists(profile_dir):
-#     os.makedirs(profile_dir)
+if not os.path.exists(profile_dir):
+    os.makedirs(profile_dir)
 
-# options = webdriver.ChromeOptions()
-# options.add_argument('--headless')  # Enable headless mode
-# options.add_argument('--disable-gpu')  # Optional, recommended for Windows
+options = webdriver.ChromeOptions()
+options.add_argument('--headless')  # Enable headless mode
+options.add_argument('--disable-gpu')  # Optional, recommended for Windows
 # options.add_argument(f"--user-data-dir={profile_dir}") # Specify the user data directory argument
 
-# driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()),options=options)
+driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()),options=options)
 
 class Scraper():
     def __init__(self):
-        # self.driver = driver
+        self.driver = driver
         self.scraped_stat_pages = {}
         self.scraped_event_pages = {}
         self.events = defaultdict(dict)
@@ -40,42 +40,19 @@ class Scraper():
         self.team_stats = defaultdict(dict)
 
     def scrape(self):
-        # try:
-        #     links = self.get_year_links("https://www.baseball-almanac.com/yearmenu.shtml")
-        # # #     # links = ["https://www.baseball-almanac.com/yearly/yr1970n.shtml", "https://www.baseball-almanac.com/yearly/yr1986n.shtml", "https://www.baseball-almanac.com/yearly/yr1887n.shtml", "https://www.baseball-almanac.com/yearly/yr1883n.shtml", "https://www.baseball-almanac.com/yearly/yr1934a.shtml"]
-        #     self.get_html(links)
+        try:
+            links = self.get_year_links("https://www.baseball-almanac.com/yearmenu.shtml")
             
-        # # # #     # Testing purposes saved all the html into a csv so I can test my code without constantly scraping website for the html.
-        #     data_to_save = [
-        #         {**value, "url": url} 
-        #         for url, value in self.scraped_event_pages.items()
-        #     ]
+        except Exception as e:
+            print("Unable to open the url provided.")
+            print(f"Exception: {type(e).__name__} {e}")
 
-        #     # Create the DataFrame
-            # events_df = pd.DataFrame(data_to_save)
-
-            # Save it - now 'url' will be its own column!
-        #     events_df.to_csv("events_test.csv", index=False)
-            
-        # except Exception as e:
-        #     print("Unable to open the url provided.")
-        #     print(f"Exception: {type(e).__name__} {e}")
-
-        df = pd.read_csv("events_test.csv")
-        data_list = df.to_dict('records')
-
-        # # Now pass that list to your function
-        self.log_event_data(data_list)
+        self.get_html(links)
         
-        data = pd.read_csv("test.csv")
-        html_strings = data["HTML_Content"]
-        self.log_stat_data(html_strings)
-        # print(self.events)
+        self.log_stat_data(self.scraped_stat_pages.values())
+        self.log_event_data(self.scraped_event_pages.values())
         
         salary_df, home_run_derby_df, draft_df = self.convert_events_to_df(self.events)
-        # print(salary_df.head())
-        # print(home_run_derby_df.head())
-        # print(draft_df.head())
         salary_df.to_csv("csv_files/salary.csv", index = False)
         home_run_derby_df.to_csv("csv_files/home_run_derby.csv", index = False)
         draft_df.to_csv("csv_files/draft.csv", index = False)
@@ -84,19 +61,13 @@ class Scraper():
         player_hit_df, player_pitch_df, player_standing_df = self.convert_stats_to_df(self.player_stats)
         team_hit_df, team_pitch_df, standing_df = self.convert_stats_to_df(self.team_stats)
         
-        
-        # # TODO THIS IS TEST TO MAKE SURE DATA IS CORRECT
-        # temp = pd.json_normalize(self.player_stats)
-        # temp.to_csv("test.csv", index = False)
-        # print(player_hit_df)
-        # print(player_pitch_df)
         player_hit_df.to_csv("csv_files/player_hit.csv", index = False)
         player_pitch_df.to_csv("csv_files/player_pitch.csv", index = False)
         team_hit_df.to_csv("csv_files/team_hit.csv", index = False)
         team_pitch_df.to_csv("csv_files/team_pitch.csv", index = False)
         standing_df.to_csv("csv_files/standing.csv", index = False)
 
-        # self.driver.quit()
+        self.driver.quit()
   
     def get_year_links(self, link):
         self.driver.get(link)

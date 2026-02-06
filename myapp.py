@@ -4,6 +4,9 @@ from contextlib import closing
 from dash import Dash, dcc, html, Input, Output, callback
 import plotly.express as px
 import plotly.graph_objects as go
+import main
+
+main.main()
 
 with closing(sqlite3.connect("db/baseball_data.db")) as conn:
     
@@ -38,6 +41,7 @@ with closing(sqlite3.connect("db/baseball_data.db")) as conn:
 
 # Initialize Dash app
 app = Dash(__name__)
+server = app.server
 
 # Layout
 app.layout = html.Div([
@@ -46,9 +50,9 @@ app.layout = html.Div([
     html.Div([
         html.Label("Choose Analysis View:"),
         dcc.Tabs(id="tabs-selector", value="ROI_Analysis", children=[
-            dcc.Tab(label="ROI Analysis", value="ROI_Analysis"),
-            dcc.Tab(label="Salary Trends", value="Salary Trends"),
-            dcc.Tab(label="Draft vs Standings", value="Draft Team Standings"),
+            dcc.Tab(label="Spending Efficiency", value="ROI_Analysis"),
+            dcc.Tab(label="League Parity", value="Salary Trends"),
+            dcc.Tab(label="Draft Performance", value="Draft Team Standings"),
         ]),
         ], style={"padding": "20px", "margin" : "auto", "text-align" : "center"}),
     
@@ -335,6 +339,15 @@ def update_all_visuals(selected_tab, selected_year, selected_teams):
                 name = "League Avg WP",
                 hovertemplate = "<br>Year: %{x}<br>Avg WP: %{y:.3f}"
             ).data
+        )
+        
+        fig.add_annotation(
+            x=avg_wp_trend['Year'].iloc[-1], # location will be at the last year (end of line)
+            y=0.500,
+            text="League Average WP",
+            showarrow=False,
+            yshift=15,
+            font=dict(color="black", size=12)
         )
         
     return fig
